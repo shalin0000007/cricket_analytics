@@ -14,7 +14,7 @@ from src.core.constants import PHASE_POWERPLAY, PHASE_MIDDLE, PHASE_DEATH
 
 
 def calculate_batter_radar_percentiles(
-    df: pd.DataFrame, batter: str, min_balls: int = 150
+    df: pd.DataFrame, batter: str, min_balls: int = 30
 ) -> Dict[str, float]:
     """
     Computes 8-axis percentiles (0-100%) for a batter against the tournament distribution:
@@ -109,7 +109,7 @@ def calculate_batter_radar_percentiles(
 
 
 def calculate_bowler_radar_percentiles(
-    df: pd.DataFrame, bowler: str, min_balls: int = 150
+    df: pd.DataFrame, bowler: str, min_balls: int = 30
 ) -> Dict[str, float]:
     """
     Computes 8-axis percentiles (0-100%) for a bowler against the tournament distribution:

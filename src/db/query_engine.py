@@ -106,30 +106,32 @@ class TacticalQueryEngine:
         sql = f"SELECT * FROM deliveries WHERE {where_clause}"
         return self.con.execute(sql, params).df()
 
-    def get_top_batters(self, min_year: Optional[int] = None, limit: int = 50) -> List[str]:
-        """Returns top run scorers for responsive UI dropdowns."""
+    def get_top_batters(self, min_year: Optional[int] = None, limit: Optional[int] = None) -> List[str]:
+        """Returns batters ordered by total runs. If limit is None, returns all players."""
         year_cond = f"WHERE season_year >= {min_year}" if min_year else ""
+        limit_clause = f"LIMIT {limit}" if limit else ""
         sql = f"""
             SELECT batter, SUM(batter_runs) as total_runs
             FROM deliveries
             {year_cond}
             GROUP BY batter
             ORDER BY total_runs DESC
-            LIMIT {limit}
+            {limit_clause}
         """
         df = self.con.execute(sql).df()
         return df["batter"].tolist()
 
-    def get_top_bowlers(self, min_year: Optional[int] = None, limit: int = 50) -> List[str]:
-        """Returns top wicket takers for responsive UI dropdowns."""
+    def get_top_bowlers(self, min_year: Optional[int] = None, limit: Optional[int] = None) -> List[str]:
+        """Returns bowlers ordered by total wickets. If limit is None, returns all players."""
         year_cond = f"WHERE season_year >= {min_year}" if min_year else ""
+        limit_clause = f"LIMIT {limit}" if limit else ""
         sql = f"""
             SELECT bowler, SUM(is_wicket) as total_wkts
             FROM deliveries
             {year_cond}
             GROUP BY bowler
             ORDER BY total_wkts DESC
-            LIMIT {limit}
+            {limit_clause}
         """
         df = self.con.execute(sql).df()
         return df["bowler"].tolist()
