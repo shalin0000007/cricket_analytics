@@ -19,6 +19,12 @@ from src.engine.team_tactics import (
     compute_team_matchup_matrix,
     generate_20_over_bowling_plan,
 )
+from src.engine.radar import (
+    calculate_batter_radar_percentiles,
+    calculate_bowler_radar_percentiles,
+    render_statsbomb_radar,
+)
+from src.core.branding import get_visual_registry, IPL_TEAM_BRANDING
 from src.reports.dossier_builder import build_batter_dossier
 from src.core.constants import ERA_RECENT_START_YEAR, ERA_ALL_TIME_START_YEAR
 
@@ -29,38 +35,77 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# Custom Styling
+# Custom Cyberpunk / Dugout War Room Styling
 st.markdown("""
 <style>
+    @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800&family=Inter:wght@400;500;600&display=swap');
+    
+    html, body, [class*="css"] {
+        font-family: 'Inter', sans-serif;
+    }
+    
+    h1, h2, h3, h4 {
+        font-family: 'Outfit', sans-serif;
+        font-weight: 700;
+        letter-spacing: -0.5px;
+    }
+    
+    .stApp {
+        background-color: #07090e;
+    }
+    
     .metric-card {
-        background-color: #1a1e29;
-        border-radius: 8px;
-        padding: 14px 18px;
-        border-left: 4px solid #38bdf8;
+        background: linear-gradient(135deg, rgba(22, 28, 42, 0.8) 0%, rgba(13, 17, 26, 0.9) 100%);
+        border-radius: 12px;
+        padding: 16px 20px;
+        border: 1px solid rgba(56, 189, 248, 0.2);
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
         margin-bottom: 12px;
     }
-    .big-stat {
-        font-size: 26px;
-        font-weight: 700;
-        color: #ffffff;
+    
+    .player-hero-card {
+        background: linear-gradient(135deg, rgba(30, 41, 59, 0.7) 0%, rgba(15, 23, 42, 0.9) 100%);
+        border-radius: 14px;
+        padding: 18px;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        display: flex;
+        align-items: center;
+        gap: 18px;
+        margin-bottom: 16px;
     }
-    .stat-label {
-        font-size: 12px;
-        color: #94a3b8;
+    
+    .player-img {
+        width: 76px;
+        height: 76px;
+        border-radius: 50%;
+        object-fit: cover;
+        border: 3px solid #38bdf8;
+        box-shadow: 0 0 15px rgba(56, 189, 248, 0.4);
+    }
+    
+    .plan-card {
+        background: rgba(18, 24, 38, 0.85);
+        border-radius: 10px;
+        padding: 14px 16px;
+        border-left: 4px solid #38bdf8;
+        border: 1px solid rgba(255, 255, 255, 0.06);
+        margin-bottom: 10px;
+    }
+    
+    .badge-chip {
+        display: inline-block;
+        padding: 3px 10px;
+        border-radius: 6px;
+        font-size: 11px;
+        font-weight: 700;
         text-transform: uppercase;
         letter-spacing: 0.5px;
-    }
-    .plan-card {
-        background-color: #181d29;
-        border-radius: 8px;
-        padding: 16px;
-        border: 1px solid #2a3346;
-        margin-bottom: 12px;
     }
 </style>
 """, unsafe_allow_html=True)
 
 engine = get_query_engine()
+visual_reg = get_visual_registry()
 
 if not engine.is_ready():
     st.error("Parquet database not found. Please run `python src/ingest_pipeline.py --download` first.")
@@ -68,7 +113,7 @@ if not engine.is_ready():
 
 # Header
 st.title("🏏 IPL Tactical Matchup & Dugout Decision Engine")
-st.caption("Next-Gen Cricket Intelligence | Probable XI Matchups | 20-Over Bowling Plan | DuckDB OLAP Engine")
+st.caption("Next-Gen Cricket Intelligence | StatsBomb Radars | Probable XI Tactical Heatmaps | DuckDB OLAP Engine")
 st.divider()
 
 # Sidebar: Tactical Selection & Filters
@@ -120,16 +165,39 @@ def get_cached_slice(min_y: int, venue: str):
 slice_df = get_cached_slice(min_year, selected_venue)
 baselines = compute_contextual_baselines(slice_df, venue=selected_venue)
 
-# Metadata Display in Sidebar
+# Metadata Display in Sidebar with Headshots
 b_meta = slice_df[slice_df["batter"] == selected_batter]
 b_hand = b_meta["batter_hand"].iloc[0] if not b_meta.empty and "batter_hand" in b_meta.columns else "Unknown"
 b_role = b_meta["batter_role"].iloc[0] if not b_meta.empty and "batter_role" in b_meta.columns else "Batter"
+batter_img = visual_reg.get_player_image(selected_batter)
+batter_team = visual_reg.get_player_team(selected_batter)
 
 bw_meta = slice_df[slice_df["bowler"] == selected_bowler]
 bowler_style = bw_meta["bowler_subtype"].iloc[0] if not bw_meta.empty and "bowler_subtype" in bw_meta.columns else "Unknown"
+bowler_img = visual_reg.get_player_image(selected_bowler)
+bowler_team = visual_reg.get_player_team(selected_bowler)
 
-st.sidebar.markdown(f"**{selected_batter}**: `{b_hand}` ({b_role})")
-st.sidebar.markdown(f"**{selected_bowler}**: `{bowler_style}`")
+# Sidebar Player Cards with Avatars
+st.sidebar.markdown(f"""
+<div style='background:#111622; padding:12px; border-radius:10px; margin-bottom:10px; border:1px solid rgba(255,255,255,0.08);'>
+    <div style='display:flex; align-items:center; gap:12px;'>
+        <img src='{batter_img}' style='width:46px; height:46px; border-radius:50%; border:2px solid #38bdf8;' />
+        <div>
+            <b>{selected_batter}</b><br>
+            <small style='color:#38bdf8;'>{b_hand} | {b_role}</small>
+        </div>
+    </div>
+</div>
+<div style='background:#111622; padding:12px; border-radius:10px; margin-bottom:10px; border:1px solid rgba(255,255,255,0.08);'>
+    <div style='display:flex; align-items:center; gap:12px;'>
+        <img src='{bowler_img}' style='width:46px; height:46px; border-radius:50%; border:2px solid #f43f5e;' />
+        <div>
+            <b>{selected_bowler}</b><br>
+            <small style='color:#f43f5e;'>{bowler_style}</small>
+        </div>
+    </div>
+</div>
+""", unsafe_allow_html=True)
 
 # IPL Team Presets for Probable XI
 IPL_TEAMS_PRESETS = {
@@ -176,14 +244,79 @@ IPL_TEAMS_PRESETS = {
 }
 
 # Main Dashboard Tabs
-tab_squad, tab1, tab2, tab3, tab4, tab5 = st.tabs([
-    "📋 Probable XI Matchup Grid & 20-Over Plan",
+tab_radar, tab_squad, tab1, tab2, tab3, tab4, tab5 = st.tabs([
+    "🕸️ StatsBomb Tactical Radar",
+    "📋 Probable XI Squad Heatmap & 20-Over Plan",
     "⚔️ Dugout Matchup (H2H & Archetype)",
     "📊 Batter Phase Dynamics & TSR",
     "🎯 Bowler Control & Pressure (TER)",
     "🏟️ Venue Par Benchmarks",
     "📑 Tactical Opposition Dossier",
 ])
+
+# ----------------- TAB RADAR: STATSBOMB PERCENTILE RADAR -----------------
+with tab_radar:
+    st.subheader("🕸️ 8-Axis Tactical Percentile Radar (StatsBomb Style)")
+    st.caption("Percentile rank (0–100%) against all qualified tournament players. Shaded area represents tactical dominance.")
+
+    r_col1, r_col2 = st.columns([1, 1])
+
+    with r_col1:
+        st.markdown(f"#### 🏏 Batter Radar: {selected_batter}")
+        # Optional Compare Batter
+        compare_batter = st.selectbox(
+            "Overlay Comparison Batter (Optional)",
+            ["None"] + [b for b in top_batters if b != selected_batter],
+            index=0,
+            key="comp_b",
+        )
+        b_radar1 = calculate_batter_radar_percentiles(slice_df, selected_batter)
+
+        if b_radar1:
+            b_radar2 = None
+            if compare_batter != "None":
+                b_radar2 = calculate_batter_radar_percentiles(slice_df, compare_batter)
+
+            fig_b_radar = render_statsbomb_radar(
+                b_radar1,
+                name1=selected_batter,
+                color1="#38bdf8",
+                data2=b_radar2,
+                name2=compare_batter if compare_batter != "None" else None,
+                color2="#f43f5e",
+                title=f"{selected_batter} Tactical Profile",
+            )
+            st.plotly_chart(fig_b_radar, use_container_width=True)
+        else:
+            st.info(f"Insufficient balls faced by {selected_batter} to calculate radar percentiles.")
+
+    with r_col2:
+        st.markdown(f"#### 🎯 Bowler Radar: {selected_bowler}")
+        compare_bowler = st.selectbox(
+            "Overlay Comparison Bowler (Optional)",
+            ["None"] + [b for b in top_bowlers if b != selected_bowler],
+            index=0,
+            key="comp_bw",
+        )
+        bw_radar1 = calculate_bowler_radar_percentiles(slice_df, selected_bowler)
+
+        if bw_radar1:
+            bw_radar2 = None
+            if compare_bowler != "None":
+                bw_radar2 = calculate_bowler_radar_percentiles(slice_df, compare_bowler)
+
+            fig_bw_radar = render_statsbomb_radar(
+                bw_radar1,
+                name1=selected_bowler,
+                color1="#10b981",
+                data2=bw_radar2,
+                name2=compare_bowler if compare_bowler != "None" else None,
+                color2="#fbbf24",
+                title=f"{selected_bowler} Tactical Profile",
+            )
+            st.plotly_chart(fig_bw_radar, use_container_width=True)
+        else:
+            st.info(f"Insufficient balls bowled by {selected_bowler} to calculate radar percentiles.")
 
 # ----------------- TAB SQUAD: PROBABLE XI & BOWLING PLAN -----------------
 with tab_squad:
@@ -288,7 +421,29 @@ with tab_squad:
 
 # ----------------- TAB 1: DUGOUT MATCHUP -----------------
 with tab1:
-    st.subheader(f"Tactical Matchup: {selected_batter} ({b_hand}) vs {selected_bowler} ({bowler_style})")
+    # Player Hero Banner with Headshots
+    st.markdown(f"""
+    <div style='background: linear-gradient(135deg, rgba(30,41,59,0.7) 0%, rgba(15,23,42,0.9) 100%); padding: 18px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.08); margin-bottom: 20px;'>
+        <div style='display:flex; justify-content:space-around; align-items:center;'>
+            <div style='display:flex; align-items:center; gap:16px;'>
+                <img src='{batter_img}' style='width:74px; height:74px; border-radius:50%; border:3px solid #38bdf8; box-shadow:0 0 15px rgba(56,189,248,0.4);' />
+                <div>
+                    <h2 style='margin:0; font-size:24px;'>{selected_batter}</h2>
+                    <span style='color:#38bdf8; font-weight:600;'>{b_hand}</span> • <span style='color:#94a3b8;'>{b_role}</span>
+                </div>
+            </div>
+            <div style='font-size:28px; font-weight:800; color:#e2e8f0;'>VS</div>
+            <div style='display:flex; align-items:center; gap:16px;'>
+                <div>
+                    <h2 style='margin:0; font-size:24px; text-align:right;'>{selected_bowler}</h2>
+                    <span style='color:#f43f5e; font-weight:600;'>{bowler_style}</span>
+                </div>
+                <img src='{bowler_img}' style='width:74px; height:74px; border-radius:50%; border:3px solid #f43f5e; box-shadow:0 0 15px rgba(244,63,94,0.4);' />
+            </div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
     verdict_info = get_dugout_tactical_verdict(slice_df, selected_batter, selected_bowler, baselines)
 
     # Tactical Verdict Banner
