@@ -1,12 +1,28 @@
+"""
+Cricsheet JSON Match Parser (Schema v1.3.0).
+Extracts ball-by-ball deliveries, normalizes tactical phases,
+and enriches player archetypes via the PlayerRegistry.
+"""
+
 import json
 import os
 from typing import Dict, List, Any, Optional
 import pandas as pd
 
+import sys
+
+# Ensure src package directory is in sys.path
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+try:
+    from player_registry import get_default_registry
+except ImportError:
+    from src.player_registry import get_default_registry
+
 
 def get_match_phase(over: int, match_type: str = "T20") -> str:
     """Categorize over into tactical phase for modern analytics."""
-    if "T20" in match_type.upper() or "IPL" in match_type.upper():
+    m_type = str(match_type).upper()
+    if "T20" in m_type or "IPL" in m_type:
         if over < 6:
             return "Powerplay (0-6)"
         elif over < 15:
@@ -22,10 +38,10 @@ def get_match_phase(over: int, match_type: str = "T20") -> str:
             return "Death Overs (41-50)"
 
 
-def parse_cricsheet_json(file_path: str) -> pd.DataFrame:
+def parse_cricsheet_json(file_path: str, enrich: bool = True) -> pd.DataFrame:
     """
     Parses a single Cricsheet JSON match file (schema v1.3.0) 
-    into a flat ball-by-ball deliveries DataFrame.
+    into a flat ball-by-ball deliveries DataFrame, enriched with player archetypes.
     """
     with open(file_path, "r", encoding="utf-8") as f:
         data = json.load(f)
@@ -36,6 +52,7 @@ def parse_cricsheet_json(file_path: str) -> pd.DataFrame:
     venue = info.get("venue", info.get("city", "Unknown"))
     date = info.get("dates", ["Unknown"])[0] if info.get("dates") else "Unknown"
     event_name = info.get("event", {}).get("name", "Unknown")
+    people_registry = info.get("registry", {}).get("people", {})
 
     deliveries_list: List[Dict[str, Any]] = []
 
@@ -102,15 +119,49 @@ def parse_cricsheet_json(file_path: str) -> pd.DataFrame:
                 }
                 deliveries_list.append(row)
 
-    return pd.DataFrame(deliveries_list)
+    df = pd.DataFrame(deliveries_list)
+
+    if enrich and not df.empty:
+        reg = get_default_registry()
+        df = reg.enrich_deliveries(df, people_registry)
+
+    return df
+
+
+def parse_matches_directory(
+    dir_path: str, max_matches: Optional[int] = None, enrich: bool = True
+) -> pd.DataFrame:
+    """
+    Bulk parses all Cricsheet JSON files in a directory into a unified DataFrame.
+    """
+    if not os.path.exists(dir_path):
+        return pd.DataFrame()
+
+    all_files = [
+        os.path.join(dir_path, f)
+        for f in os.listdir(dir_path)
+        if f.endswith(".json")
+    ]
+    if max_matches:
+        all_files = all_files[:max_matches]
+
+    frames = []
+    for fp in all_files:
+        try:
+            frames.append(parse_cricsheet_json(fp, enrich=enrich))
+        except Exception as e:
+            print(f"[Warning] Failed to parse {fp}: {e}")
+
+    return pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
 
 
 if __name__ == "__main__":
     sample_file = os.path.join(os.path.dirname(__file__), "..", "data", "raw", "1525657.json")
     if os.path.exists(sample_file):
-        df = parse_cricsheet_json(sample_file)
-        print(f"Successfully parsed {len(df)} deliveries from {os.path.basename(sample_file)}!")
-        print(f"Teams: {df['batting_team'].unique().tolist()}")
-        print(f"Sample delivery head:\n", df[["over", "ball", "phase", "batter", "bowler", "batter_runs", "is_wicket"]].head(5))
+        df = parse_cricsheet_json(sample_file, enrich=True)
+        print(f"Successfully parsed & enriched {len(df)} deliveries!")
+        print(f"Match: {df['event'].iloc[0]} ({df['date'].iloc[0]})")
+        print("\nSample Enriched Matchups:")
+        print(df[["phase", "batter", "batter_hand", "bowler", "bowler_subtype", "matchup_archetype"]].head(6))
     else:
         print("Sample file not found at:", sample_file)

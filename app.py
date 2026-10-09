@@ -6,26 +6,34 @@ import os
 import sys
 
 # Ensure src modules can be imported
-sys.path.append(os.path.join(os.path.dirname(__file__), "src"))
-from parser import parse_cricsheet_json
-from analytics import get_head_to_head, get_batter_phase_stats, get_bowler_economy_summary
+sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+
+from src.db.query_engine import get_query_engine, normalize_venue_name
+from src.engine.baselines import compute_contextual_baselines
+from src.engine.true_metrics import (
+    calculate_batter_tactical_metrics,
+    calculate_bowler_tactical_metrics,
+)
+from src.engine.matchups import get_archetype_matrix, get_dugout_tactical_verdict
+from src.reports.dossier_builder import build_batter_dossier
+from src.core.constants import ERA_RECENT_START_YEAR, ERA_ALL_TIME_START_YEAR
 
 st.set_page_config(
-    page_title="IPL Dugout Tactical Matchup Engine",
+    page_title="IPL Dugout Tactical Matchup & Strategy Engine",
     page_icon="🏏",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="expanded",
 )
 
 # Custom Styling
 st.markdown("""
 <style>
     .metric-card {
-        background-color: #1e222d;
-        border-radius: 10px;
-        padding: 15px;
-        border-left: 5px solid #ff4b4b;
-        margin-bottom: 10px;
+        background-color: #1a1e29;
+        border-radius: 8px;
+        padding: 14px 18px;
+        border-left: 4px solid #38bdf8;
+        margin-bottom: 12px;
     }
     .big-stat {
         font-size: 26px;
@@ -33,119 +41,267 @@ st.markdown("""
         color: #ffffff;
     }
     .stat-label {
-        font-size: 13px;
-        color: #8b949e;
+        font-size: 12px;
+        color: #94a3b8;
         text-transform: uppercase;
+        letter-spacing: 0.5px;
+    }
+    .badge-bowler {
+        background-color: #ef4444;
+        color: white;
+        padding: 4px 10px;
+        border-radius: 6px;
+        font-size: 13px;
+        font-weight: 600;
+    }
+    .badge-batter {
+        background-color: #22c55e;
+        color: white;
+        padding: 4px 10px;
+        border-radius: 6px;
+        font-size: 13px;
+        font-weight: 600;
     }
 </style>
 """, unsafe_allow_html=True)
 
+engine = get_query_engine()
 
-@st.cache_data
-def load_match_data(file_path: str):
-    return parse_cricsheet_json(file_path)
-
-
-# Load Data
-data_file = os.path.join(os.path.dirname(__file__), "data", "raw", "1525657.json")
-if not os.path.exists(data_file):
-    st.error(f"Match data not found at {data_file}")
+if not engine.is_ready():
+    st.error("Parquet database not found. Please run `python src/ingest_pipeline.py --download` first.")
     st.stop()
 
-df = load_match_data(data_file)
-
 # Header
-st.title("🏏 IPL Dugout Tactical Matchup Engine")
-st.caption(f"**Match Loaded:** {df['event'].iloc[0]} ({df['match_type'].iloc[0]}) | **Venue:** {df['venue'].iloc[0]} | **Date:** {df['date'].iloc[0]}")
+st.title("🏏 IPL Tactical Matchup & Dugout Decision Engine")
+st.caption("Next-Gen Cricket Intelligence | Micro-Phase Matchups | Venue & Era Normalization | DuckDB OLAP Engine")
 st.divider()
 
-# Sidebar: Tactical Selection
-st.sidebar.header("🎯 Tactical Matchup Selectors")
+# Sidebar: Tactical Selection & Filters
+st.sidebar.header("⚙️ Tactical Filters & Era")
 
-batters = sorted(df["batter"].unique())
-bowlers = sorted(df["bowler"].unique())
+era_choice = st.sidebar.radio(
+    "Recency Window",
+    ["Recent Form (2022–2024)", "Career All-Time (2008–2024)"],
+    index=0,
+    help="Recent form isolates modern high-scoring par scores post-2022 mega-auction.",
+)
+min_year = ERA_RECENT_START_YEAR if "Recent" in era_choice else ERA_ALL_TIME_START_YEAR
 
-selected_batter = st.sidebar.selectbox("Select Batter", batters, index=0)
-selected_bowler = st.sidebar.selectbox("Select Bowler", bowlers, index=min(2, len(bowlers)-1))
+# Venue Selection
+venue_options = [
+    "All Venues",
+    "Wankhede Stadium",
+    "M Chinnaswamy Stadium",
+    "Eden Gardens",
+    "Chepauk",
+    "Narendra Modi Stadium",
+    "Ekana Stadium",
+    "Arun Jaitley Stadium",
+    "Rajiv Gandhi Stadium",
+]
+selected_venue = st.sidebar.selectbox("Venue Context", venue_options, index=0)
 
-# Analytics Computation
-h2h = get_head_to_head(df, selected_batter, selected_bowler)
-batter_phases = get_batter_phase_stats(df, selected_batter)
+# Fetch Dynamic Top Players based on selected era
+top_batters = engine.get_top_batters(min_year=min_year, limit=60)
+top_bowlers = engine.get_top_bowlers(min_year=min_year, limit=60)
 
-# Main Dashboard Layout
-tab1, tab2, tab3 = st.tabs(["⚔️ Head-to-Head (H2H) Matchup", "📊 Batter Phase Radar", "🎯 Bowler Economy & Pressure"])
+st.sidebar.subheader("🎯 Player Matchup")
+selected_batter = st.sidebar.selectbox(
+    "Select Batter",
+    top_batters,
+    index=0 if top_batters else 0,
+)
+selected_bowler = st.sidebar.selectbox(
+    "Select Bowler",
+    top_bowlers,
+    index=min(1, len(top_bowlers) - 1) if top_bowlers else 0,
+)
 
+# Load Filtered Dataset via DuckDB
+@st.cache_data
+def get_cached_slice(min_y: int, venue: str):
+    return engine.get_deliveries(min_year=min_y, venue=venue if venue != "All Venues" else None)
+
+slice_df = get_cached_slice(min_year, selected_venue)
+baselines = compute_contextual_baselines(slice_df, venue=selected_venue)
+
+# Metadata Display in Sidebar
+b_meta = slice_df[slice_df["batter"] == selected_batter]
+b_hand = b_meta["batter_hand"].iloc[0] if not b_meta.empty and "batter_hand" in b_meta.columns else "Unknown"
+b_role = b_meta["batter_role"].iloc[0] if not b_meta.empty and "batter_role" in b_meta.columns else "Batter"
+
+bw_meta = slice_df[slice_df["bowler"] == selected_bowler]
+bowler_style = bw_meta["bowler_subtype"].iloc[0] if not bw_meta.empty and "bowler_subtype" in bw_meta.columns else "Unknown"
+
+st.sidebar.markdown(f"**{selected_batter}**: `{b_hand}` ({b_role})")
+st.sidebar.markdown(f"**{selected_bowler}**: `{bowler_style}`")
+
+# Main Dashboard Tabs
+tab1, tab2, tab3, tab4, tab5 = st.tabs([
+    "⚔️ Dugout Matchup (H2H & Archetype)",
+    "📊 Batter Phase Dynamics & TSR",
+    "🎯 Bowler Control & Pressure (TER)",
+    "🏟️ Venue Par Benchmarks",
+    "📑 Tactical Opposition Dossier",
+])
+
+# ----------------- TAB 1: DUGOUT MATCHUP -----------------
 with tab1:
-    st.subheader(f"Tactical Matchup: {selected_batter} vs {selected_bowler}")
+    st.subheader(f"Tactical Matchup: {selected_batter} ({b_hand}) vs {selected_bowler} ({bowler_style})")
+    verdict_info = get_dugout_tactical_verdict(slice_df, selected_batter, selected_bowler, baselines)
 
-    if h2h["balls_faced"] == 0:
-        st.info(f"No direct head-to-head deliveries between **{selected_batter}** and **{selected_bowler}** in this match record.")
+    # Tactical Verdict Banner
+    if verdict_info["level"] == "bowler_advantage":
+        st.error(f"🛡️ **VERDICT: {verdict_info['verdict']}**\n\n{verdict_info['advice']}")
+    elif verdict_info["level"] == "batter_advantage":
+        st.warning(f"🔥 **VERDICT: {verdict_info['verdict']}**\n\n{verdict_info['advice']}")
     else:
-        col1, col2, col3, col4, col5 = st.columns(5)
-        col1.metric("Balls Faced", h2h["balls_faced"])
-        col2.metric("Runs Scored", h2h["runs_scored"])
-        col3.metric("Strike Rate", f"{h2h['strike_rate']}%")
-        col4.metric("Dot Ball %", f"{h2h['dot_percentage']}%")
-        col5.metric("Dismissals", h2h["dismissals"])
+        st.info(f"⚖️ **VERDICT: {verdict_info['verdict']}**\n\n{verdict_info['advice']}")
 
-        # Dugout Tactical Recommendation Box
-        st.markdown("### 📋 Dugout Tactical Verdict")
-        if h2h["strike_rate"] >= 140:
-            st.success(f"🔥 **Batter Dominant:** {selected_batter} scores freely against {selected_bowler} (SR: {h2h['strike_rate']}). Consider changing bowling matchup.")
-        elif h2h["dot_percentage"] >= 50 or h2h["strike_rate"] < 100:
-            st.warning(f"🛡️ **Bowler Pressure:** {selected_bowler} controls this matchup ({h2h['dot_percentage']}% dots, SR: {h2h['strike_rate']}). Recommended containment matchup.")
-        else:
-            st.info(f"⚖️ **Balanced Battle:** Strike Rate at {h2h['strike_rate']} with standard rotation.")
+    st.caption(f"**Decision Basis:** `{verdict_info['decision_source']}` | **Recency:** `{era_choice}`")
 
+    # 1. Direct H2H
+    st.markdown("### 1. Direct Head-to-Head Record")
+    if verdict_info["direct_balls"] == 0:
+        st.info(f"💡 No direct deliveries recorded between **{selected_batter}** and **{selected_bowler}** in this slice. Archetype priors used above.")
+    else:
+        c1, c2, c3, c4, c5 = st.columns(5)
+        c1.metric("Balls Faced", verdict_info["direct_balls"])
+        c2.metric("Runs Scored", verdict_info["direct_runs"])
+        c3.metric("Strike Rate", f"{verdict_info['direct_sr']}")
+        c4.metric("Dot Ball %", f"{verdict_info['direct_dot_pct']}%")
+        c5.metric("Dismissals", verdict_info["direct_outs"])
+
+    # 2. Archetype Context
+    st.markdown(f"### 2. Archetype Matchup: {selected_batter} vs {bowler_style}")
+    if verdict_info["archetype_balls"] > 0:
+        ca1, ca2, ca3, ca4, ca5 = st.columns(5)
+        ca1.metric("Archetype Balls", verdict_info["archetype_balls"])
+        ca2.metric("Archetype Runs", verdict_info["archetype_runs"])
+        ca3.metric("Archetype SR", f"{verdict_info['archetype_sr']}")
+        ca4.metric("Archetype Dot %", f"{verdict_info['archetype_dot_pct']}%")
+        ca5.metric("Dismissals vs Archetype", verdict_info["archetype_outs"])
+    else:
+        st.write("Insufficient archetype deliveries in this slice.")
+
+# ----------------- TAB 2: BATTER PHASE DYNAMICS & TSR -----------------
 with tab2:
-    st.subheader(f"📈 {selected_batter} - Performance Across Tactical Phases")
-    if not batter_phases.empty:
+    st.subheader(f"📈 {selected_batter} - Phase Breakdown & True Strike Rate (TSR)")
+    batter_profile = calculate_batter_tactical_metrics(slice_df, selected_batter, baselines)
+    arch_matrix = get_archetype_matrix(slice_df, selected_batter, baselines)
+
+    if not batter_profile.empty:
         col_l, col_r = st.columns([1, 1])
         with col_l:
-            fig_sr = px.bar(
-                batter_phases,
+            fig_tsr = px.bar(
+                batter_profile,
                 x="phase",
-                y="strike_rate",
-                color="phase",
-                title=f"{selected_batter} Strike Rate by Phase",
-                text="strike_rate",
-                template="plotly_dark"
+                y="true_sr",
+                color="true_sr",
+                color_continuous_scale="RdYlGn",
+                title=f"{selected_batter} - True Strike Rate (TSR) vs Par",
+                labels={"true_sr": "True Strike Rate (TSR)", "phase": "Phase"},
+                text="true_sr",
+                template="plotly_dark",
             )
-            fig_sr.update_traces(texttemplate='%{text:.1f}', textposition='outside')
-            st.plotly_chart(fig_sr, use_container_width=True)
+            fig_tsr.update_traces(texttemplate='%{text:+.1f}', textposition='outside')
+            st.plotly_chart(fig_tsr, use_container_width=True)
 
         with col_r:
-            fig_dots = px.pie(
-                batter_phases,
-                names="phase",
-                values="runs",
-                title=f"Runs Distribution by Phase",
+            fig_dots = px.bar(
+                batter_profile,
+                x="phase",
+                y=["dot_pct", "boundary_pct"],
+                barmode="group",
+                title=f"{selected_batter} - Dot % vs Boundary % by Phase",
                 template="plotly_dark",
-                hole=0.4
+                labels={"value": "Percentage (%)", "variable": "Metric"},
             )
             st.plotly_chart(fig_dots, use_container_width=True)
 
-        st.dataframe(batter_phases, use_container_width=True)
-    else:
-        st.write("No phase data available.")
+        st.markdown("#### Phase Summary Table")
+        st.dataframe(batter_profile, use_container_width=True)
 
+    if not arch_matrix.empty:
+        st.markdown(f"#### 🎯 {selected_batter} vs Bowling Archetypes (Bayesian Regressed)")
+        st.dataframe(arch_matrix, use_container_width=True)
+
+# ----------------- TAB 3: BOWLER PRESSURE MATRIX -----------------
 with tab3:
-    st.subheader("🎯 Bowler Economy & Dot Ball Pressure Index")
-    bowler_df = get_bowler_economy_summary(df)
-    
-    fig_bowlers = px.scatter(
-        bowler_df,
-        x="economy",
-        y="dot_pct",
-        size="balls",
-        color="wickets",
-        hover_name="bowler",
-        text="bowler",
-        title="Bowler Control Matrix (Economy vs Dot %)",
-        labels={"economy": "Economy Rate (Lower is Better)", "dot_pct": "Dot Ball % (Higher is Better)"},
-        template="plotly_dark"
+    st.subheader(f"🎯 Bowler Control: {selected_bowler} ({bowler_style})")
+    bowler_profile = calculate_bowler_tactical_metrics(slice_df, selected_bowler, baselines)
+
+    if not bowler_profile.empty:
+        st.markdown(f"#### Phase Breakdown for {selected_bowler}")
+        st.dataframe(bowler_profile, use_container_width=True)
+
+    # General bowler comparison
+    all_bowler_stats = []
+    for b in top_bowlers[:20]:
+        b_p = calculate_bowler_tactical_metrics(slice_df, b, baselines)
+        if not b_p.empty:
+            b_balls = b_p["balls"].sum()
+            b_runs = b_p["runs"].sum()
+            b_wkts = b_p["wickets"].sum()
+            b_dots = b_p["dot_pct"].mean()
+            b_econ = round(b_runs / (b_balls / 6.0), 2) if b_balls > 0 else 0.0
+            all_bowler_stats.append({
+                "bowler": b,
+                "subtype": slice_df[slice_df["bowler"] == b]["bowler_subtype"].iloc[0] if not slice_df[slice_df["bowler"] == b].empty else "Unknown",
+                "balls": b_balls,
+                "runs": b_runs,
+                "wickets": b_wkts,
+                "economy": b_econ,
+                "avg_dot_pct": round(b_dots, 1),
+            })
+    if all_bowler_stats:
+        b_df_matrix = pd.DataFrame(all_bowler_stats)
+        fig_b = px.scatter(
+            b_df_matrix,
+            x="economy",
+            y="avg_dot_pct",
+            size="balls",
+            color="subtype",
+            hover_name="bowler",
+            text="bowler",
+            title="Top Bowlers Control Matrix (Economy vs Dot %)",
+            labels={"economy": "Economy (Lower is Better)", "avg_dot_pct": "Dot % (Higher is Better)"},
+            template="plotly_dark",
+        )
+        fig_b.update_traces(textposition='top center')
+        st.plotly_chart(fig_b, use_container_width=True)
+
+# ----------------- TAB 4: VENUE PAR BENCHMARKS -----------------
+with tab4:
+    st.subheader("🏟️ Stadium Par Score & Run Rate Benchmarks")
+    venue_table = engine.get_venue_par_table(min_year=min_year)
+    if not venue_table.empty:
+        st.dataframe(venue_table, use_container_width=True)
+        fig_venue = px.bar(
+            venue_table.head(10),
+            x="venue",
+            y="par_rpo",
+            color="par_rpo",
+            color_continuous_scale="Viridis",
+            title="Highest Scoring IPL Stadiums (Par Runs Per Over)",
+            template="plotly_dark",
+        )
+        st.plotly_chart(fig_venue, use_container_width=True)
+
+# ----------------- TAB 5: TACTICAL OPPOSITION DOSSIER -----------------
+with tab5:
+    st.subheader(f"📑 1-Page Pre-Match Opposition Dossier: {selected_batter}")
+    dossier_text = build_batter_dossier(
+        slice_df,
+        selected_batter,
+        baselines,
+        era_label=era_choice,
+        venue=selected_venue,
     )
-    fig_bowlers.update_traces(textposition='top center')
-    st.plotly_chart(fig_bowlers, use_container_width=True)
-    
-    st.dataframe(bowler_df, use_container_width=True)
+    st.markdown(dossier_text)
+    st.download_button(
+        label=f"📥 Download Dossier ({selected_batter}.md)",
+        data=dossier_text,
+        file_name=f"{selected_batter.lower().replace(' ', '_')}_{era_choice.split()[0].lower()}_dossier.md",
+        mime="text/markdown",
+    )
