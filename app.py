@@ -15,6 +15,10 @@ from src.engine.true_metrics import (
     calculate_bowler_tactical_metrics,
 )
 from src.engine.matchups import get_archetype_matrix, get_dugout_tactical_verdict
+from src.engine.team_tactics import (
+    compute_team_matchup_matrix,
+    generate_20_over_bowling_plan,
+)
 from src.reports.dossier_builder import build_batter_dossier
 from src.core.constants import ERA_RECENT_START_YEAR, ERA_ALL_TIME_START_YEAR
 
@@ -46,21 +50,12 @@ st.markdown("""
         text-transform: uppercase;
         letter-spacing: 0.5px;
     }
-    .badge-bowler {
-        background-color: #ef4444;
-        color: white;
-        padding: 4px 10px;
-        border-radius: 6px;
-        font-size: 13px;
-        font-weight: 600;
-    }
-    .badge-batter {
-        background-color: #22c55e;
-        color: white;
-        padding: 4px 10px;
-        border-radius: 6px;
-        font-size: 13px;
-        font-weight: 600;
+    .plan-card {
+        background-color: #181d29;
+        border-radius: 8px;
+        padding: 16px;
+        border: 1px solid #2a3346;
+        margin-bottom: 12px;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -73,7 +68,7 @@ if not engine.is_ready():
 
 # Header
 st.title("🏏 IPL Tactical Matchup & Dugout Decision Engine")
-st.caption("Next-Gen Cricket Intelligence | Micro-Phase Matchups | Venue & Era Normalization | DuckDB OLAP Engine")
+st.caption("Next-Gen Cricket Intelligence | Probable XI Matchups | 20-Over Bowling Plan | DuckDB OLAP Engine")
 st.divider()
 
 # Sidebar: Tactical Selection & Filters
@@ -105,7 +100,7 @@ selected_venue = st.sidebar.selectbox("Venue Context", venue_options, index=0)
 top_batters = engine.get_top_batters(min_year=min_year, limit=60)
 top_bowlers = engine.get_top_bowlers(min_year=min_year, limit=60)
 
-st.sidebar.subheader("🎯 Player Matchup")
+st.sidebar.subheader("🎯 Individual Matchup Selectors")
 selected_batter = st.sidebar.selectbox(
     "Select Batter",
     top_batters,
@@ -136,14 +131,160 @@ bowler_style = bw_meta["bowler_subtype"].iloc[0] if not bw_meta.empty and "bowle
 st.sidebar.markdown(f"**{selected_batter}**: `{b_hand}` ({b_role})")
 st.sidebar.markdown(f"**{selected_bowler}**: `{bowler_style}`")
 
+# IPL Team Presets for Probable XI
+IPL_TEAMS_PRESETS = {
+    "Chennai Super Kings": {
+        "batters": ["RD Gaikwad", "S Dube", "AM Rahane", "RA Jadeja", "MS Dhoni", "MM Ali"],
+        "bowlers": ["Mustafizur Rahman", "RA Jadeja", "M Pathirana", "TU Deshpande", "DL Chahar"],
+    },
+    "Mumbai Indians": {
+        "batters": ["RG Sharma", "Ishan Kishan", "SA Yadav", "Tilak Varma", "HH Pandya", "TH David"],
+        "bowlers": ["JJ Bumrah", "P Chawla", "G Coetzee", "N Thushara", "HH Pandya"],
+    },
+    "Kolkata Knight Riders": {
+        "batters": ["PD Salt", "Sunil Narine", "VR Iyer", "SS Iyer", "RK Singh", "AD Russell"],
+        "bowlers": ["MA Starc", "CV Varun", "Sunil Narine", "Harshit Rana", "AD Russell"],
+    },
+    "Royal Challengers Bengaluru": {
+        "batters": ["V Kohli", "F du Plessis", "RM Patidar", "GJ Maxwell", "C Green", "KD Karthik"],
+        "bowlers": ["Mohammed Siraj", "LH Ferguson", "Yash Dayal", "KV Sharma", "C Green"],
+    },
+    "Rajasthan Royals": {
+        "batters": ["YBK Jaiswal", "JC Buttler", "SV Samson", "R Parag", "SO Hetmyer", "Dhruv Jurel"],
+        "bowlers": ["TA Boult", "Avesh Khan", "YS Chahal", "R Ashwin", "Sandeep Sharma"],
+    },
+    "Sunrisers Hyderabad": {
+        "batters": ["TM Head", "Abhishek Sharma", "RA Tripathi", "AK Markram", "H Klaasen", "NK Reddy"],
+        "bowlers": ["PJ Cummins", "B Kumar", "T Natarajan", "M Markande", "JD Unadkat"],
+    },
+    "Gujarat Titans": {
+        "batters": ["Shubman Gill", "WP Saha", "B Sai Sudharsan", "DA Miller", "R Tewatia", "Rashid Khan"],
+        "bowlers": ["Rashid Khan", "MM Sharma", "Noor Ahmad", "Umesh Yadav", "SH Johnson"],
+    },
+    "Delhi Capitals": {
+        "batters": ["DA Warner", "PP Shaw", "MR Marsh", "RR Pant", "T Stubbs", "AR Patel"],
+        "bowlers": ["A Nortje", "KK Ahmed", "AR Patel", "Kuldeep Yadav", "Mukesh Kumar"],
+    },
+    "Lucknow Super Giants": {
+        "batters": ["KL Rahul", "Q de Kock", "D Padikkal", "N Pooran", "MP Stoinis", "Ayush Badoni"],
+        "bowlers": ["Naveen-ul-Haq", "Mayank Yadav", "Ravi Bishnoi", "KH Pandya", "Mohsin Khan"],
+    },
+    "Punjab Kings": {
+        "batters": ["S Dhawan", "JM Bairstow", "PR Prabhsimran Singh", "SM Curran", "JM Sharma", "Shashank Singh"],
+        "bowlers": ["K Rabada", "Arshdeep Singh", "SM Curran", "HV Patel", "RD Chahar"],
+    },
+}
+
 # Main Dashboard Tabs
-tab1, tab2, tab3, tab4, tab5 = st.tabs([
+tab_squad, tab1, tab2, tab3, tab4, tab5 = st.tabs([
+    "📋 Probable XI Matchup Grid & 20-Over Plan",
     "⚔️ Dugout Matchup (H2H & Archetype)",
     "📊 Batter Phase Dynamics & TSR",
     "🎯 Bowler Control & Pressure (TER)",
     "🏟️ Venue Par Benchmarks",
     "📑 Tactical Opposition Dossier",
 ])
+
+# ----------------- TAB SQUAD: PROBABLE XI & BOWLING PLAN -----------------
+with tab_squad:
+    st.subheader("📋 Pre-Match Squad Tactical Heatmap & 20-Over Allocation Plan")
+    st.caption("Used by IPL coaches to identify matchup chokes and pre-plan bowler overs against opposition batting orders.")
+
+    col_t1, col_t2 = st.columns(2)
+    with col_t1:
+        opp_team = st.selectbox("Select Opposition Batting Team", list(IPL_TEAMS_PRESETS.keys()), index=0)
+        default_batters = IPL_TEAMS_PRESETS[opp_team]["batters"]
+        active_batters = st.multiselect(
+            "Opposition Batting Lineup (Edit order / players)",
+            options=top_batters,
+            default=[b for b in default_batters if b in top_batters],
+        )
+
+    with col_t2:
+        our_team = st.selectbox("Select Our Bowling Attack Team", list(IPL_TEAMS_PRESETS.keys()), index=1)
+        default_bowlers = IPL_TEAMS_PRESETS[our_team]["bowlers"]
+        active_bowlers = st.multiselect(
+            "Our Bowling Attack (Select 5–6 bowlers)",
+            options=top_bowlers,
+            default=[b for b in default_bowlers if b in top_bowlers],
+        )
+
+    if not active_batters or not active_bowlers:
+        st.warning("Please select at least 1 batter and 1 bowler to generate squad matrix.")
+    else:
+        adv_matrix, det_matrix = compute_team_matchup_matrix(slice_df, active_batters, active_bowlers, baselines)
+
+        st.markdown("### 1. Tactical Matchup Heatmap Matrix")
+        st.caption("🔴 Red = High Dismissal Risk / Bowler Choke | 🔵 Blue/Green = Batter Attack Hazard | ⚪ White = Par")
+
+        fig_heat = px.imshow(
+            adv_matrix,
+            labels=dict(x="Bowler", y="Batter", color="Advantage Score"),
+            x=active_bowlers,
+            y=active_batters,
+            color_continuous_scale="RdBu_r",
+            color_continuous_midpoint=0.0,
+            text_auto=True,
+            aspect="auto",
+            template="plotly_dark",
+            title=f"Matchup Heatmap: {opp_team} Batters vs {our_team} Attack",
+        )
+        fig_heat.update_layout(height=420)
+        st.plotly_chart(fig_heat, use_container_width=True)
+
+        # 20-Over Bowling Plan
+        st.markdown("### 2. Automated 20-Over Bowling Plan Allocation")
+        bowling_plan = generate_20_over_bowling_plan(slice_df, active_batters, active_bowlers, baselines)
+
+        if bowling_plan and "plan" in bowling_plan:
+            cp1, cp2, cp3 = st.columns(3)
+            with cp1:
+                st.markdown("#### ⚡ Powerplay (Overs 1–6)")
+                st.caption("New ball swing & early wicket pressure")
+                for entry in bowling_plan["plan"].get("Powerplay (Overs 1-6)", []):
+                    st.markdown(
+                        f"""<div class='plan-card'>
+                        <b>{entry['bowler']}</b>: {entry['overs']} Over(s)<br>
+                        <small style='color: #38bdf8;'>{entry['subtype']}</small><br>
+                        <small style='color: #94a3b8;'>{entry['role']}</small><br>
+                        <b>{entry['metric']}</b>
+                        </div>""",
+                        unsafe_allow_html=True,
+                    )
+
+            with cp2:
+                st.markdown("#### 🌀 Middle Overs (Overs 7–15)")
+                st.caption("Spin choke & matchup restrictions")
+                for entry in bowling_plan["plan"].get("Middle (Overs 7-15)", []):
+                    st.markdown(
+                        f"""<div class='plan-card'>
+                        <b>{entry['bowler']}</b>: {entry['overs']} Over(s)<br>
+                        <small style='color: #38bdf8;'>{entry['subtype']}</small><br>
+                        <small style='color: #94a3b8;'>{entry['role']}</small><br>
+                        <b>{entry['metric']}</b>
+                        </div>""",
+                        unsafe_allow_html=True,
+                    )
+
+            with cp3:
+                st.markdown("#### 🎯 Death Overs (Overs 16–20)")
+                st.caption("Yorkers & boundary suppression")
+                for entry in bowling_plan["plan"].get("Death (Overs 16-20)", []):
+                    st.markdown(
+                        f"""<div class='plan-card'>
+                        <b>{entry['bowler']}</b>: {entry['overs']} Over(s)<br>
+                        <small style='color: #38bdf8;'>{entry['subtype']}</small><br>
+                        <small style='color: #94a3b8;'>{entry['role']}</small><br>
+                        <b>{entry['metric']}</b>
+                        </div>""",
+                        unsafe_allow_html=True,
+                    )
+
+            # Quota Summary
+            st.markdown("#### Bowler Quota Verification (Max 4 overs per bowler)")
+            quota_cols = st.columns(len(bowling_plan["overs_by_bowler"]))
+            for idx, (b_name, b_ov) in enumerate(bowling_plan["overs_by_bowler"].items()):
+                quota_cols[idx].metric(b_name, f"{b_ov} / 4 ov")
 
 # ----------------- TAB 1: DUGOUT MATCHUP -----------------
 with tab1:
