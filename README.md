@@ -82,8 +82,8 @@ Queries the 295,732-row database with zero-copy execution in **5–20 millisecon
 
 ### 1. Clone & Setup Environment
 ```bash
-git clone https://github.com/shalingonge/cricket-analytics-engine.git
-cd cricket-analytics-engine
+git clone https://github.com/shalin0000007/cricket_analytics.git
+cd cricket_analytics
 
 python -m venv .venv
 source .venv/bin/activate  # On Windows: .venv\Scripts\activate
