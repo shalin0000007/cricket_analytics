@@ -1,0 +1,197 @@
+﻿import type { Player, MatchupVerdict, DeliveryBall, BatterRadarProfile, BowlerRadarProfile, VenuePar, BowlingPlan } from '../types';
+
+export const FRANCHISES: Record<string, { primary: string; secondary: string; accent: string; short: string }> = {
+  'Chennai Super Kings': { primary: '#facc15', secondary: '#1e3a8a', accent: '#fbbf24', short: 'CSK' },
+  'Mumbai Indians': { primary: '#0284c7', secondary: '#eab308', accent: '#38bdf8', short: 'MI' },
+  'Kolkata Knight Riders': { primary: '#7c3aed', secondary: '#f59e0b', accent: '#a855f7', short: 'KKR' },
+  'Royal Challengers Bengaluru': { primary: '#dc2626', secondary: '#f59e0b', accent: '#ef4444', short: 'RCB' },
+  'Rajasthan Royals': { primary: '#ec4899', secondary: '#1e3a8a', accent: '#f472b6', short: 'RR' },
+  'Sunrisers Hyderabad': { primary: '#f97316', secondary: '#0f172a', accent: '#fb923c', short: 'SRH' },
+  'Gujarat Titans': { primary: '#1e293b', secondary: '#38bdf8', accent: '#0ea5e9', short: 'GT' },
+  'Delhi Capitals': { primary: '#0284c7', secondary: '#dc2626', accent: '#38bdf8', short: 'DC' },
+  'Lucknow Super Giants': { primary: '#06b6d4', secondary: '#f97316', accent: '#22d3ee', short: 'LSG' },
+  'Punjab Kings': { primary: '#ef4444', secondary: '#94a3b8', accent: '#f87171', short: 'PBKS' },
+};
+
+export const PLAYERS: Player[] = [
+  { name: 'V Kohli', hand: 'RHB', role: 'Top-order Batter', team: 'Royal Challengers Bengaluru', image: 'https://images.icc-cricket.com/image/upload/t_player-headshot-portrait/prd/assets/players/generic/253802.png' },
+  { name: 'RG Sharma', hand: 'RHB', role: 'Opening Batter', team: 'Mumbai Indians', image: 'https://images.icc-cricket.com/image/upload/t_player-headshot-portrait/prd/assets/players/generic/107.png' },
+  { name: 'Shubman Gill', hand: 'RHB', role: 'Opening Batter', team: 'Gujarat Titans', image: 'https://images.icc-cricket.com/image/upload/t_player-headshot-portrait/prd/assets/players/generic/66818.png' },
+  { name: 'YBK Jaiswal', hand: 'LHB', role: 'Opening Batter', team: 'Rajasthan Royals', image: 'https://images.icc-cricket.com/image/upload/t_player-headshot-portrait/prd/assets/players/generic/70659.png' },
+  { name: 'H Klaasen', hand: 'RHB', role: 'Finisher', team: 'Sunrisers Hyderabad', image: 'https://images.icc-cricket.com/image/upload/t_player-headshot-portrait/prd/assets/players/generic/40836.png' },
+  { name: 'SA Yadav', hand: 'RHB', role: 'Middle-order Batter', team: 'Mumbai Indians', image: 'https://images.icc-cricket.com/image/upload/t_player-headshot-portrait/prd/assets/players/generic/11803.png' },
+  { name: 'F du Plessis', hand: 'RHB', role: 'Opening Batter', team: 'Royal Challengers Bengaluru', image: 'https://images.icc-cricket.com/image/upload/t_player-headshot-portrait/prd/assets/players/generic/24.png' },
+  { name: 'RD Gaikwad', hand: 'RHB', role: 'Opening Batter', team: 'Chennai Super Kings', image: 'https://images.icc-cricket.com/image/upload/t_player-headshot-portrait/prd/assets/players/generic/67702.png' },
+  { name: 'S Dube', hand: 'LHB', role: 'Middle-order Batter', team: 'Chennai Super Kings', image: 'https://images.icc-cricket.com/image/upload/t_player-headshot-portrait/prd/assets/players/generic/65430.png' },
+  { name: 'RR Pant', hand: 'LHB', role: 'Wicketkeeper Batter', team: 'Delhi Capitals', image: 'https://images.icc-cricket.com/image/upload/t_player-headshot-portrait/prd/assets/players/generic/2972.png' },
+  { name: 'KL Rahul', hand: 'RHB', role: 'Opening Batter', team: 'Lucknow Super Giants', image: 'https://images.icc-cricket.com/image/upload/t_player-headshot-portrait/prd/assets/players/generic/2975.png' },
+  { name: 'TM Head', hand: 'LHB', role: 'Opening Batter', team: 'Sunrisers Hyderabad', image: 'https://images.icc-cricket.com/image/upload/t_player-headshot-portrait/prd/assets/players/generic/1020.png' },
+  
+  // Bowlers
+  { name: 'JJ Bumrah', bowlerType: 'Pace', bowlerSubtype: 'Right-arm Pace', role: 'Pace Bowler', team: 'Mumbai Indians', image: 'https://images.icc-cricket.com/image/upload/t_player-headshot-portrait/prd/assets/players/generic/1124.png' },
+  { name: 'Rashid Khan', bowlerType: 'Spin', bowlerSubtype: 'Right-arm Legbreak', role: 'Spin Bowler', team: 'Gujarat Titans', image: 'https://images.icc-cricket.com/image/upload/t_player-headshot-portrait/prd/assets/players/generic/2887.png' },
+  { name: 'Arshdeep Singh', bowlerType: 'Pace', bowlerSubtype: 'Left-arm Pace', role: 'Pace Bowler', team: 'Punjab Kings', image: 'https://images.icc-cricket.com/image/upload/t_player-headshot-portrait/prd/assets/players/generic/67905.png' },
+  { name: 'Kuldeep Yadav', bowlerType: 'Spin', bowlerSubtype: 'Left-arm Wrist Spin', role: 'Spin Bowler', team: 'Delhi Capitals', image: 'https://images.icc-cricket.com/image/upload/t_player-headshot-portrait/prd/assets/players/generic/261.png' },
+  { name: 'RA Jadeja', bowlerType: 'Spin', bowlerSubtype: 'Left-arm Orthodox', role: 'Allrounder', team: 'Chennai Super Kings', image: 'https://images.icc-cricket.com/image/upload/t_player-headshot-portrait/prd/assets/players/generic/9.png' },
+  { name: 'Sunil Narine', bowlerType: 'Spin', bowlerSubtype: 'Right-arm Offbreak', role: 'Allrounder', team: 'Kolkata Knight Riders', image: 'https://images.icc-cricket.com/image/upload/t_player-headshot-portrait/prd/assets/players/generic/203.png' },
+  { name: 'MA Starc', bowlerType: 'Pace', bowlerSubtype: 'Left-arm Pace', role: 'Pace Bowler', team: 'Kolkata Knight Riders', image: 'https://images.icc-cricket.com/image/upload/t_player-headshot-portrait/prd/assets/players/generic/488.png' },
+  { name: 'Mohammed Siraj', bowlerType: 'Pace', bowlerSubtype: 'Right-arm Pace', role: 'Pace Bowler', team: 'Royal Challengers Bengaluru', image: 'https://images.icc-cricket.com/image/upload/t_player-headshot-portrait/prd/assets/players/generic/3840.png' },
+  { name: 'HH Pandya', bowlerType: 'Pace', bowlerSubtype: 'Right-arm Pace', role: 'Allrounder', team: 'Mumbai Indians', image: 'https://images.icc-cricket.com/image/upload/t_player-headshot-portrait/prd/assets/players/generic/2740.png' },
+  { name: 'CV Varun', bowlerType: 'Spin', bowlerSubtype: 'Right-arm Legbreak', role: 'Spin Bowler', team: 'Kolkata Knight Riders', image: 'https://images.icc-cricket.com/image/upload/t_player-headshot-portrait/prd/assets/players/generic/69590.png' },
+];
+
+export const VENUES: VenuePar[] = [
+  { venue: 'All Venues', parRpo: 8.64, sampleDeliveries: 295732, ppParSr: 128.4, middleParSr: 132.8, deathParSr: 171.2 },
+  { venue: 'Wankhede Stadium', parRpo: 9.42, sampleDeliveries: 34120, ppParSr: 138.2, middleParSr: 139.5, deathParSr: 184.6 },
+  { venue: 'M Chinnaswamy Stadium', parRpo: 9.68, sampleDeliveries: 31800, ppParSr: 142.1, middleParSr: 141.0, deathParSr: 189.2 },
+  { venue: 'Eden Gardens', parRpo: 9.15, sampleDeliveries: 30450, ppParSr: 134.6, middleParSr: 136.2, deathParSr: 178.5 },
+  { venue: 'MA Chidambaram Stadium (Chepauk)', parRpo: 8.12, sampleDeliveries: 28900, ppParSr: 121.5, middleParSr: 124.0, deathParSr: 161.4 },
+  { venue: 'Narendra Modi Stadium', parRpo: 8.92, sampleDeliveries: 22100, ppParSr: 132.0, middleParSr: 134.8, deathParSr: 174.9 },
+  { venue: 'BRSABV Ekana Stadium (Lucknow)', parRpo: 7.95, sampleDeliveries: 12400, ppParSr: 118.0, middleParSr: 120.4, deathParSr: 154.2 },
+  { venue: 'Arun Jaitley Stadium', parRpo: 9.38, sampleDeliveries: 27500, ppParSr: 136.9, middleParSr: 138.4, deathParSr: 181.2 },
+  { venue: 'Rajiv Gandhi Stadium', parRpo: 8.85, sampleDeliveries: 24200, ppParSr: 130.5, middleParSr: 133.1, deathParSr: 172.0 },
+];
+
+export const SAMPLE_DUEL_BALLS: DeliveryBall[] = [
+  { over: 1, ball: 2, runs: 0, isDot: true, isFour: false, isSix: false, isWicket: false, matchId: '1359475', date: '2023-04-02' },
+  { over: 1, ball: 3, runs: 0, isDot: true, isFour: false, isSix: false, isWicket: false, matchId: '1359475', date: '2023-04-02' },
+  { over: 1, ball: 4, runs: 4, isDot: false, isFour: true, isSix: false, isWicket: false, matchId: '1359475', date: '2023-04-02' },
+  { over: 1, ball: 5, runs: 1, isDot: false, isFour: false, isSix: false, isWicket: false, matchId: '1359475', date: '2023-04-02' },
+  { over: 3, ball: 1, runs: 0, isDot: true, isFour: false, isSix: false, isWicket: false, matchId: '1359475', date: '2023-04-02' },
+  { over: 3, ball: 2, runs: 0, isDot: true, isFour: false, isSix: false, isWicket: false, matchId: '1359475', date: '2023-04-02' },
+  { over: 3, ball: 3, runs: 1, isDot: false, isFour: false, isSix: false, isWicket: false, matchId: '1359475', date: '2023-04-02' },
+  { over: 16, ball: 2, runs: 0, isDot: true, isFour: false, isSix: false, isWicket: false, matchId: '1359475', date: '2023-04-02' },
+  { over: 16, ball: 3, runs: 2, isDot: false, isFour: false, isSix: false, isWicket: false, matchId: '1359475', date: '2023-04-02' },
+  { over: 16, ball: 4, runs: 1, isDot: false, isFour: false, isSix: false, isWicket: false, matchId: '1359475', date: '2023-04-02' },
+  { over: 2, ball: 1, runs: 0, isDot: true, isFour: false, isSix: false, isWicket: false, matchId: '1426260', date: '2024-04-11' },
+  { over: 2, ball: 2, runs: 0, isDot: true, isFour: false, isSix: false, isWicket: false, matchId: '1426260', date: '2024-04-11' },
+  { over: 2, ball: 3, runs: 0, isDot: true, isFour: false, isSix: false, isWicket: true, wicketKind: 'caught', matchId: '1426260', date: '2024-04-11' },
+  { over: 18, ball: 1, runs: 1, isDot: false, isFour: false, isSix: false, isWicket: false, matchId: '1304065', date: '2022-04-09' },
+  { over: 18, ball: 2, runs: 6, isDot: false, isFour: false, isSix: true, isWicket: false, matchId: '1304065', date: '2022-04-09' },
+  { over: 18, ball: 3, runs: 0, isDot: true, isFour: false, isSix: false, isWicket: false, matchId: '1304065', date: '2022-04-09' },
+  { over: 18, ball: 4, runs: 1, isDot: false, isFour: false, isSix: false, isWicket: false, matchId: '1304065', date: '2022-04-09' },
+  { over: 18, ball: 5, runs: 4, isDot: false, isFour: true, isSix: false, isWicket: false, matchId: '1304065', date: '2022-04-09' },
+  { over: 18, ball: 6, runs: 2, isDot: false, isFour: false, isSix: false, isWicket: false, matchId: '1304065', date: '2022-04-09' },
+  { over: 4, ball: 2, runs: 0, isDot: true, isFour: false, isSix: false, isWicket: false, matchId: '1304065', date: '2022-04-09' },
+  { over: 4, ball: 3, runs: 1, isDot: false, isFour: false, isSix: false, isWicket: false, matchId: '1304065', date: '2022-04-09' },
+  { over: 4, ball: 4, runs: 0, isDot: true, isFour: false, isSix: false, isWicket: false, matchId: '1304065', date: '2022-04-09' },
+  { over: 4, ball: 5, runs: 4, isDot: false, isFour: true, isSix: false, isWicket: false, matchId: '1304065', date: '2022-04-09' },
+  { over: 4, ball: 6, runs: 1, isDot: false, isFour: false, isSix: false, isWicket: false, matchId: '1304065', date: '2022-04-09' },
+];
+
+export const SAMPLE_VERDICT: MatchupVerdict = {
+  batter: 'V Kohli',
+  batterHand: 'RHB',
+  bowler: 'JJ Bumrah',
+  bowlerSubtype: 'Right-arm Pace',
+  directBalls: 24,
+  directRuns: 33,
+  directOuts: 1,
+  directSr: 137.5,
+  directDotPct: 33.3,
+  archetypeBalls: 847,
+  archetypeRuns: 1374,
+  archetypeOuts: 32,
+  archetypeSr: 162.2,
+  regressedSr: 162.0,
+  archetypeDotPct: 29.0,
+  decisionSource: 'Direct H2H (24 balls)',
+  verdict: 'TACTICAL PAR / BALANCED BATTLE',
+  level: 'neutral',
+  advice: 'Neutral contest at SR 137.5. Deploy Bumrah in Middle overs where Kohli slows down.',
+};
+
+export const SAMPLE_BATTER_RADAR: Record<string, BatterRadarProfile> = {
+  'V Kohli': {
+    'Powerplay Velocity': 85.7,
+    'Middle Phase Control': 57.1,
+    'Death Finishing Power': 77.3,
+    'Boundary Frequency': 53.2,
+    'Dot Avoidance': 90.1,
+    'Dismissal Resistance': 99.5,
+    'Spin Mastery': 50.7,
+    'Pace Acceleration': 72.9,
+  },
+  'RG Sharma': {
+    'Powerplay Velocity': 94.2,
+    'Middle Phase Control': 62.4,
+    'Death Finishing Power': 68.1,
+    'Boundary Frequency': 78.4,
+    'Dot Avoidance': 66.8,
+    'Dismissal Resistance': 54.2,
+    'Spin Mastery': 64.1,
+    'Pace Acceleration': 86.5,
+  },
+  'Shubman Gill': {
+    'Powerplay Velocity': 82.5,
+    'Middle Phase Control': 89.2,
+    'Death Finishing Power': 78.4,
+    'Boundary Frequency': 74.1,
+    'Dot Avoidance': 76.5,
+    'Dismissal Resistance': 88.0,
+    'Spin Mastery': 91.2,
+    'Pace Acceleration': 84.0,
+  },
+  'YBK Jaiswal': {
+    'Powerplay Velocity': 96.8,
+    'Middle Phase Control': 71.5,
+    'Death Finishing Power': 84.1,
+    'Boundary Frequency': 92.4,
+    'Dot Avoidance': 69.2,
+    'Dismissal Resistance': 68.0,
+    'Spin Mastery': 86.4,
+    'Pace Acceleration': 95.1,
+  },
+};
+
+export const SAMPLE_BOWLER_RADAR: Record<string, BowlerRadarProfile> = {
+  'JJ Bumrah': {
+    'Powerplay Control': 93.3,
+    'Middle Overs Choke': 98.6,
+    'Death Yorker Control': 97.1,
+    'Dot Ball Mastery': 93.8,
+    'Boundary Suppression': 93.3,
+    'Wicket Strike Rate': 40.5,
+    'Powerplay Dot Pressure': 94.3,
+    'Workhorse Volume': 92.4,
+  },
+  'Rashid Khan': {
+    'Powerplay Control': 76.2,
+    'Middle Overs Choke': 94.5,
+    'Death Yorker Control': 82.0,
+    'Dot Ball Mastery': 88.4,
+    'Boundary Suppression': 89.1,
+    'Wicket Strike Rate': 72.0,
+    'Powerplay Dot Pressure': 78.2,
+    'Workhorse Volume': 90.1,
+  },
+};
+
+export const SAMPLE_BOWLING_PLAN: BowlingPlan = {
+  plan: {
+    'Powerplay (Overs 1-6)': [
+      { bowler: 'N Thushara', overs: 2, subtype: 'Right-arm Pace', role: 'Swing Enforcer', metric: 'Econ 7.4 | Dot 52%' },
+      { bowler: 'JJ Bumrah', overs: 2, subtype: 'Right-arm Pace', role: 'Early Wicket Choke', metric: 'Econ 6.2 | Dot 58%' },
+      { bowler: 'G Coetzee', overs: 2, subtype: 'Right-arm Pace', role: 'Pace Barrage', metric: 'Econ 8.1 | Wkts 4' },
+    ],
+    'Middle (Overs 7-15)': [
+      { bowler: 'P Chawla', overs: 3, subtype: 'Right-arm Legbreak', role: 'Spin Choke', metric: 'Econ 7.8 | Dot 42%' },
+      { bowler: 'HH Pandya', overs: 3, subtype: 'Right-arm Pace', role: 'Hard Lengths', metric: 'Econ 8.6 | Wkts 2' },
+      { bowler: 'P Chawla', overs: 1, subtype: 'Right-arm Legbreak', role: 'Phase Closer', metric: 'Econ 7.8' },
+      { bowler: 'HH Pandya', overs: 1, subtype: 'Right-arm Pace', role: 'Enforcer', metric: 'Econ 8.6' },
+      { bowler: 'G Coetzee', overs: 1, subtype: 'Right-arm Pace', role: 'Pace Shock', metric: 'Econ 8.1' },
+    ],
+    'Death (Overs 16-20)': [
+      { bowler: 'JJ Bumrah', overs: 2, subtype: 'Right-arm Pace', role: 'Yorker Lockout', metric: 'Econ 6.8 | Dot 46%' },
+      { bowler: 'G Coetzee', overs: 1, subtype: 'Right-arm Pace', role: 'Bouncer / Slower ball', metric: 'Econ 9.2' },
+      { bowler: 'N Thushara', overs: 2, subtype: 'Right-arm Pace', role: 'Toe Crushers', metric: 'Econ 8.4' },
+    ],
+  },
+  oversByBowler: {
+    'JJ Bumrah': 4,
+    'HH Pandya': 4,
+    'G Coetzee': 4,
+    'P Chawla': 4,
+    'N Thushara': 4,
+  },
+};

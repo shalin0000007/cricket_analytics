@@ -1,0 +1,115 @@
+﻿@import "tailwindcss";
+
+@layer base {
+  :root {
+    --night: #05070B;
+    --outfield: #07140D;
+    --carbon: #0D1117;
+    --glass: rgba(13, 17, 23, 0.72);
+    --line: rgba(242, 238, 227, 0.10);
+    --whites: #F2EEE3;
+    --mute: #8E9AA8;
+    --cherry: #C8102E;
+    --floodlight: #FFF1CC;
+    --pitch: #CBB98A;
+    --prior: #FBBF24;
+    --par: #7C8CA3;
+
+    /* THERMAL SCALE (data only) */
+    --t0: #0B1E5B;
+    --t1: #4B2A9E;
+    --t2: #C2307A;
+    --t3: #FF7A1A;
+    --t4: #FFD84A;
+    --t5: #FFF8E0;
+
+    /* Active franchise accent token (default CSK Canary Gold) */
+    --team: #FACC15;
+  }
+
+  html {
+    font-family: 'Manrope', -apple-system, sans-serif;
+    background-color: var(--night);
+    color: var(--whites);
+  }
+}
+
+/* Typography Utility Classes */
+.font-display {
+  font-family: 'Big Shoulders Display', sans-serif;
+  letter-spacing: -0.02em;
+}
+
+.font-scoreboard {
+  font-family: 'Doto', monospace;
+  font-feature-settings: 'tnum' on, 'lnum' on;
+}
+
+.font-data {
+  font-family: 'JetBrains Mono', monospace;
+  font-feature-settings: 'tnum' on, 'zero' on;
+}
+
+.font-body {
+  font-family: 'Manrope', sans-serif;
+}
+
+/* Cricket 22-Yard Pitch Strip Divider Motif */
+.pitch-strip {
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    rgba(203, 185, 138, 0.25) 15%,
+    rgba(203, 185, 138, 0.6) 50%,
+    rgba(203, 185, 138, 0.25) 85%,
+    transparent 100%
+  );
+  height: 2px;
+  position: relative;
+}
+
+.pitch-strip::before,
+.pitch-strip::after {
+  content: '';
+  position: absolute;
+  top: -4px;
+  width: 4px;
+  height: 10px;
+  background-color: var(--pitch);
+  border-radius: 1px;
+}
+
+.pitch-strip::before {
+  left: 15%;
+}
+
+.pitch-strip::after {
+  right: 15%;
+}
+
+/* Stadium Floodlight Cones Ambient Glow */
+.stadium-ambient {
+  background-image: 
+    radial-gradient(circle at 10% 0%, rgba(255, 241, 204, 0.05) 0%, transparent 45%),
+    radial-gradient(circle at 90% 0%, rgba(255, 241, 204, 0.05) 0%, transparent 45%),
+    radial-gradient(circle at 50% 100%, rgba(7, 20, 13, 0.6) 0%, transparent 60%);
+}
+
+/* Custom Tactical Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--night);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(242, 238, 227, 0.15);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--cherry);
+}
